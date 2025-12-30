@@ -2,106 +2,348 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
-
-<!-- 🚫 DESABILITA ZOOM -->
-<meta name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-
-<title>XML</title>
-
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Game XML → HTML (auto)</title>
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-  overflow: hidden;
-
-  /* 🚫 zoom / gesture */
-  touch-action: none;
-  overscroll-behavior: none;
-}
-
-#stage {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: #000;
-}
-
-.sprite {
-  position: absolute;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
+  :root{
+    --bg:#0b0b0b; --panel:#0f0f12; --accent:#FF7A1B; --muted:#9aa0a6; --white:#FFFFFF;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--white);font-family:Inter,system-ui,monospace;}
+  header{padding:14px 18px;border-bottom:1px solid #111;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);}
+  header h1{margin:0;font-size:16px;letter-spacing:0.4px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13px}
+  main{display:flex;gap:18px;padding:18px;height:calc(100% - 84px);box-sizing:border-box;}
+  #left{width:420px;max-width:40vw;min-width:320px;background:var(--panel);padding:12px;border-radius:8px;overflow:auto}
+  #right{flex:1;background:var(--panel);padding:12px;border-radius:8px;overflow:auto}
+  .meta{font-size:13px;color:var(--muted);margin-bottom:10px}
+  pre.xml{white-space:pre-wrap;background:#060606;padding:10px;border-radius:6px;overflow:auto;font-size:12px}
+  .node{border:1px solid #1a1a1a;padding:8px;margin:8px 0;border-radius:6px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)}
+  .node .hdr{display:flex;justify-content:space-between;cursor:pointer;user-select:none}
+  .node .hdr .name{font-weight:700;color:var(--accent)}
+  .node .body{margin-top:8px;display:block}
+  .attr{font-size:13px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px;border-bottom:1px solid #111;text-align:left}
+  th{color:var(--muted);font-weight:600}
+  img.asset{max-width:160px;max-height:120px;display:block;margin-top:6px;border-radius:6px}
+  .warn{color:#ffcc66;font-weight:700}
+  .ok{color:#66ff88}
+  footer{position:fixed;left:18px;right:18px;bottom:18px;background:transparent;color:var(--muted);font-size:13px}
+  a.small{color:var(--accent);text-decoration:none}
+  .controls{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  button{background:#111;border:1px solid #222;padding:6px 10px;border-radius:6px;color:var(--white);cursor:pointer}
 </style>
 </head>
-
 <body>
-<div id="stage"></div>
+<header>
+  <h1>XML → HTML automático</h1>
+  <p>Se houver <code>&lt;?xml-stylesheet ... href="style.xsl"?&gt;</code>, o XSL será aplicado. Caso contrário, uso um renderizador JS fallback.</p>
+</header>
+
+<main>
+  <section id="left">
+    <div class="meta">
+      <strong>game.xml</strong>
+      <div id="status" style="margin-top:6px;color:var(--muted)">Carregando...</div>
+    </div>
+
+    <div class="controls">
+      <button id="reloadBtn">🔁 Recarregar</button>
+      <button id="downloadHtmlBtn">⬇️ Baixar HTML</button>
+      <div style="flex:1"></div>
+    </div>
+
+    <div>
+      <strong>XML bruto</strong>
+      <pre id="rawXml" class="xml">Carregando...</pre>
+    </div>
+  </section>
+
+  <section id="right">
+    <div class="meta"><strong>Visualização</strong> (resultado da transformação)</div>
+    <div id="content">
+      <div style="color:var(--muted)">Aguardando carregamento...</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span class="warn">Obs:</span> assets referenciados serão apontados para <code>assets/</code> por padrão. Nomes terminando em <code>.gif.png</code> serão convertidos para <code>.gif</code> automaticamente.
+</footer>
 
 <script>
-// ===============================
-// UTIL
-// ===============================
-function resolveAssetName(name) {
-  if (!name) return null;
-  if (name.endsWith('.gif.png')) {
-    return name.replace(/\.gif\.png$/, '.gif');
-  }
-  return name;
-}
+(async function(){
+  const rawXmlEl = document.getElementById('rawXml');
+  const contentEl = document.getElementById('content');
+  const statusEl = document.getElementById('status');
+  const reloadBtn = document.getElementById('reloadBtn');
+  const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
 
-// ===============================
-// LOAD XML
-// ===============================
-async function loadGame(xmlPath = 'game.xml') {
-  const stage = document.getElementById('stage');
-
-  let xmlText;
-  try {
-    const res = await fetch(xmlPath);
-    if (!res.ok) throw new Error('XML não encontrado');
-    xmlText = await res.text();
-  } catch (e) {
-    console.warn('⚠️ game.xml não carregado:', e.message);
-    return;
+  // Utility: replace "name.gif.png" -> "name.gif"
+  function resolveAssetName(name){
+    if(!name) return name;
+    if(name.endsWith('.gif.png')) return name.replace(/\.gif\.png$/,'\.gif');
+    return name;
   }
 
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(xmlText, 'application/xml');
+  // Fetch game.xml text
+  async function fetchXmlText(path='game.xml'){
+    try{
+      const res = await fetch(path, {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.text();
+    }catch(e){
+      throw new Error('Falha ao buscar ' + path + ': ' + e.message);
+    }
+  }
 
-  const sprites = xml.querySelectorAll('sprite');
+  // Try to extract xml-stylesheet href from xml text
+  function extractStylesheetHref(xmlText){
+    // procura <?xml-stylesheet ... href="..." ?>
+    const m = xmlText.match(/<\?xml-stylesheet[^>]*href\s*=\s*['"]([^'"]+)['"][^>]*\?>/i);
+    return m ? m[1] : null;
+  }
 
-  sprites.forEach(s => {
-    const rawSrc = s.getAttribute('src');
-    if (!rawSrc) return;
+  // Apply XSLT (browser support assumed); returns DocumentFragment or HTML element
+  async function applyXSLT(xmlDoc, xslText){
+    try{
+      const xslDoc = new DOMParser().parseFromString(xslText, 'application/xml');
+      if(window.XSLTProcessor){
+        const proc = new XSLTProcessor();
+        proc.importStylesheet(xslDoc);
+        const frag = proc.transformToFragment(xmlDoc, document);
+        return frag;
+      } else {
+        // fallback: try transformToDocument (older)
+        if(typeof window.ActiveXObject !== 'undefined' || 'ActiveXObject' in window){
+          // old IE path (unlikely on modern browsers)
+          const xs = new ActiveXObject('Msxml2.XSLTemplate');
+          const xsDoc = new ActiveXObject('Msxml2.FreeThreadedDOMDocument');
+          xsDoc.loadXML(xslText);
+          const template = xs.createTemplate();
+          template.stylesheet = xsDoc;
+          const xsl = template.createProcessor();
+          xsl.input = xmlDoc;
+          xsl.transform();
+          const html = xsl.output;
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+          return wrapper;
+        }
+        throw new Error('XSLTProcessor não disponível neste navegador');
+      }
+    }catch(e){
+      throw new Error('Erro XSLT: ' + (e.message || e));
+    }
+  }
 
-    const src = resolveAssetName(rawSrc);
-    const img = new Image();
-    img.className = 'sprite';
+  // Default JS renderer: recursivo, cria nó colapsável mostrando elementos, atributos, textContent
+  function renderXmlFallback(xmlDoc){
+    const wrap = document.createElement('div');
 
-    // posição
-    img.style.left = (s.getAttribute('x') || 0) + 'px';
-    img.style.top  = (s.getAttribute('y') || 0) + 'px';
-    img.style.zIndex = s.getAttribute('z') || 1;
+    function renderNode(node){
+      if(node.nodeType === Node.TEXT_NODE){
+        const t = node.textContent.trim();
+        if(!t) return null;
+        const el = document.createElement('div');
+        el.textContent = t;
+        el.style.padding = '4px 0';
+        return el;
+      }
 
-    // 🚫 SE A IMAGEM NÃO EXISTIR → IGNORA
-    img.onerror = () => {
-      console.warn('⚠️ Asset ignorado:', src);
-      img.remove();
-    };
+      if(node.nodeType !== Node.ELEMENT_NODE) return null;
 
-    img.src = 'assets/' + src;
-    stage.appendChild(img);
+      const box = document.createElement('div');
+      box.className = 'node';
+
+      const hdr = document.createElement('div');
+      hdr.className = 'hdr';
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = '<' + node.nodeName + '>';
+
+      const attrBtn = document.createElement('div');
+      attrBtn.innerHTML = '<small style="color:var(--muted)">' + (node.children.length + (node.attributes? node.attributes.length : 0)) + ' itens</small>';
+
+      hdr.appendChild(name);
+      hdr.appendChild(attrBtn);
+      box.appendChild(hdr);
+
+      const body = document.createElement('div');
+      body.className = 'body';
+
+      // attributes
+      if(node.attributes && node.attributes.length){
+        const attrsWrap = document.createElement('div');
+        attrsWrap.style.marginBottom = '6px';
+        Array.from(node.attributes).forEach(a=>{
+          const row = document.createElement('div');
+          row.className = 'attr';
+          row.textContent = a.name + ' = "' + a.value + '"';
+          attrsWrap.appendChild(row);
+        });
+        body.appendChild(attrsWrap);
+      }
+
+      // special-case: sprite elements -> show table with src preview (resolve .gif.png)
+      if(node.nodeName.toLowerCase() === 'sprite'){
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        thead.innerHTML = '<tr><th>campo</th><th>valor</th></tr>';
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        // attributes as rows
+        Array.from(node.attributes).forEach(a=>{
+          const tr = document.createElement('tr');
+          const k = document.createElement('td'); k.textContent = a.name;
+          const v = document.createElement('td'); v.textContent = a.value;
+          tr.appendChild(k); tr.appendChild(v);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        body.appendChild(table);
+
+        // try show image preview if 'src' attr exists
+        const srcAttr = node.getAttribute('src');
+        if(srcAttr){
+          const resolved = resolveAssetName(srcAttr);
+          const img = document.createElement('img');
+          img.className = 'asset';
+          img.src = 'assets/' + resolved;
+          img.alt = resolved;
+          // if fail -> show placeholder
+          img.onerror = () => {
+            img.style.display = 'none';
+            const p = document.createElement('div');
+            p.style.color = 'var(--muted)';
+            p.textContent = 'Preview não disponível: assets/' + resolved;
+            body.appendChild(p);
+          };
+          body.appendChild(img);
+        }
+      } // end sprite
+
+      // children
+      const childWrap = document.createElement('div');
+      Array.from(node.childNodes).forEach(cn=>{
+        const childEl = renderNode(cn);
+        if(childEl) childWrap.appendChild(childEl);
+      });
+      body.appendChild(childWrap);
+
+      // collapsible behaviour
+      hdr.addEventListener('click', ()=>{
+        if(body.style.display === 'none'){ body.style.display = 'block'; }
+        else { body.style.display = 'none'; }
+      });
+      // initially expanded for root-level, collapsed for deeper nodes
+      body.style.display = node.parentElement && node.parentElement.nodeName !== '#document' ? 'none':'block';
+
+      box.appendChild(body);
+      return box;
+    }
+
+    const root = xmlDoc.documentElement;
+    const title = document.createElement('h2');
+    title.textContent = '<' + root.nodeName + '>';
+    wrap.appendChild(title);
+
+    const tree = renderNode(root);
+    if(tree) wrap.appendChild(tree);
+    return wrap;
+  }
+
+  // Convert DocumentFragment/Element to HTML string for download
+  function htmlStringFromNode(node){
+    const div = document.createElement('div');
+    div.appendChild(node.cloneNode(true));
+    return '<!doctype html>\n<html>\n<head><meta charset="utf-8"><title>Exported</title></head>\n<body style="background:#000;color:#fff;font-family:Inter,system-ui,monospace;margin:20px">' + div.innerHTML + '</body></html>';
+  }
+
+  // Main render pipeline
+  async function renderPipeline(){
+    statusEl.textContent = 'Carregando game.xml...';
+    rawXmlEl.textContent = '...';
+    contentEl.innerHTML = '<div style="color:var(--muted)">Processando...</div>';
+
+    let xmlText;
+    try{
+      xmlText = await fetchXmlText('game.xml');
+    }catch(e){
+      rawXmlEl.textContent = '';
+      contentEl.innerHTML = '<div class="warn">Erro ao carregar game.xml — veja console.</div>';
+      statusEl.textContent = 'Erro: game.xml não carregado';
+      console.error(e);
+      return;
+    }
+
+    rawXmlEl.textContent = xmlText;
+    statusEl.textContent = 'game.xml carregado';
+
+    // procurar stylesheet PI
+    const stylesheetHref = extractStylesheetHref(xmlText);
+    const xmlDoc = new DOMParser().parseFromString(xmlText, 'application/xml');
+
+    // Se há parse error, mostra na tela
+    const parserError = xmlDoc.querySelector('parsererror');
+    if(parserError){
+      contentEl.innerHTML = '<div class="warn">Erro ao parsear XML — ver console para detalhes.</div>';
+      console.error('XML parse error', parserError.textContent || parserError.innerText);
+      statusEl.textContent = 'Erro no XML';
+      return;
+    }
+
+    // tenta XSLT se houver href
+    if(stylesheetHref){
+      statusEl.textContent = 'Estilo detectado: ' + stylesheetHref + ' → aplicando XSLT...';
+      try{
+        // busca o XSL (relativo)
+        const xslText = await fetchXmlText(stylesheetHref);
+        const frag = await applyXSLT(xmlDoc, xslText);
+        contentEl.innerHTML = '';
+        contentEl.appendChild(frag);
+        statusEl.textContent = 'Transformação XSLT aplicada';
+        return;
+      }catch(e){
+        console.warn('Falha XSLT fallback:', e.message || e);
+        // segue para fallback
+      }
+    }
+
+    // fallback: JS renderer
+    statusEl.textContent = 'Nenhum XSL detectado — usando renderer JS fallback';
+    try{
+      const fallback = renderXmlFallback(xmlDoc);
+      contentEl.innerHTML = '';
+      contentEl.appendChild(fallback);
+      statusEl.textContent = 'Renderização via JS (fallback) concluída';
+    }catch(e){
+      contentEl.innerHTML = '<div class="warn">Falha ao renderizar XML — veja console.</div>';
+      console.error(e);
+      statusEl.textContent = 'Erro na renderização JS';
+    }
+  }
+
+  // wire buttons
+  reloadBtn.addEventListener('click', ()=>{ renderPipeline(); });
+  downloadHtmlBtn.addEventListener('click', async ()=>{
+    // tenta capturar o conteúdo atual e transformar em HTML string
+    const exported = htmlStringFromNode(contentEl);
+    const blob = new Blob([exported], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'game_export.html';
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    a.remove();
   });
-}
 
-// ===============================
-// START
-// ===============================
-loadGame();
+  // inicializa
+  renderPipeline();
+})();
 </script>
 </body>
 </html>
