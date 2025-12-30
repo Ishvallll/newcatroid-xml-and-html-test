@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<program>
+  <header>
+    <applicationBuildName></applicationBuildName>
+    <applicationBuildNumber>0</applicationBuildNumber>
+    <applicationBuildType>release</applicationBuildType>
+    <applicationName>NewCatroid</applicationName>
+    <applicationVersion>2.0.4p3</applicationVersion>
+    <catrobatLanguageVersion>1.13</catrobatLanguageVersion>
+    <dateTimeUpload></dateTimeUpload>
+    <description></description>
+    <deviceName>SM-A515F</deviceName>
+    <isCastProject>false</isCastProject>
+    <landscapeMode>false</landscapeMode>
+    <listeningLanguageTag></listeningLanguageTag>
+    <mediaLicense></mediaLicense>
+    <notesAndCredits></notesAndCredits>
+    <platform>Android</platform>
+    <platformVersion>31</platformVersion>
+    <programLicense></programLicense>
+    <programName>Meu projeto (3)</programName>
+    <remixOf></remixOf>
+    <scenesEnabled>true</scenesEnabled>
+    <screenHeight>2186</screenHeight>
+    <screenMode>STRETCH</screenMode>
+    <screenWidth>1080</screenWidth>
+    <tags></tags>
+    <url></url>
+    <userHandle></userHandle>
+  </header>
+  <settings/>
+  <scenes>
+    <scene>
+      <name>Cena</name>
+      <objectList>
+        <object type="Sprite" name="Fundo">
+          <lookList/>
+          <soundList/>
+          <scriptList>
+            <script type="StartScript" posX="0.0" posY="0.0">
+              <brickList>
+                <brick type="ShowText3Brick">
+                  <brickId>33e8d309-f4f8-44b5-969e-fd8b297db5f7</brickId>
+                  <commentedOut>false</commentedOut>
+                  <formulaList>
+                    <formula category="TEXT">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>`^´</value>
+                    </formula>
+                    <formula category="X_POSITION">
+                      <additionalChildren/>
+                      <type>NUMBER</type>
+                      <value>100</value>
+                    </formula>
+                    <formula category="SIZE">
+                      <additionalChildren/>
+                      <type>NUMBER</type>
+                      <value>120.0</value>
+                    </formula>
+                    <formula category="COLOR">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>#FF0000</value>
+                    </formula>
+                    <formula category="NAME">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>idk</value>
+                    </formula>
+                    <formula category="Y_POSITION">
+                      <additionalChildren/>
+                      <type>NUMBER</type>
+                      <value>200</value>
+                    </formula>
+                  </formulaList>
+                  <alignmentSelection>1</alignmentSelection>
+                </brick>
+              </brickList>
+              <commentedOut>false</commentedOut>
+              <scriptId>49a4849a-85df-4e2b-a2f7-71bf7565831b</scriptId>
+            </script>
+            <script type="WhenTouchDownScript" posX="0.0" posY="0.0">
+              <brickList>
+                <brick type="ShowText3Brick">
+                  <brickId>bf7276cd-a50d-43ad-b8dd-6caa5691f0a6</brickId>
+                  <commentedOut>false</commentedOut>
+                  <formulaList>
+                    <formula category="TEXT">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>`^´</value>
+                    </formula>
+                    <formula category="X_POSITION">
+                      <additionalChildren/>
+                      <leftChild>
+                        <additionalChildren/>
+                        <rightChild>
+                          <additionalChildren/>
+                          <type>NUMBER</type>
+                          <value>500</value>
+                        </rightChild>
+                        <type>OPERATOR</type>
+                        <value>MINUS</value>
+                      </leftChild>
+                      <rightChild>
+                        <additionalChildren/>
+                        <type>NUMBER</type>
+                        <value>500</value>
+                      </rightChild>
+                      <type>FUNCTION</type>
+                      <value>RAND</value>
+                    </formula>
+                    <formula category="SIZE">
+                      <additionalChildren/>
+                      <type>NUMBER</type>
+                      <value>120.0</value>
+                    </formula>
+                    <formula category="COLOR">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>#FF0000</value>
+                    </formula>
+                    <formula category="NAME">
+                      <additionalChildren/>
+                      <type>STRING</type>
+                      <value>idk</value>
+                    </formula>
+                    <formula category="Y_POSITION">
+                      <additionalChildren/>
+                      <leftChild>
+                        <additionalChildren/>
+                        <rightChild>
+                          <additionalChildren/>
+                          <type>NUMBER</type>
+                          <value>1000</value>
+                        </rightChild>
+                        <type>OPERATOR</type>
+                        <value>MINUS</value>
+                      </leftChild>
+                      <rightChild>
+                        <additionalChildren/>
+                        <type>NUMBER</type>
+                        <value>1000</value>
+                      </rightChild>
+                      <type>FUNCTION</type>
+                      <value>RAND</value>
+                    </formula>
+                  </formulaList>
+                  <alignmentSelection>1</alignmentSelection>
+                </brick>
+              </brickList>
+              <commentedOut>false</commentedOut>
+              <scriptId>34fa6157-6c01-4d3f-80ff-0c158f909331</scriptId>
+            </script>
+          </scriptList>
+          <nfcTagList/>
+          <userVariables/>
+          <userLists/>
+          <userDefinedBrickList/>
+        </object>
+      </objectList>
+    </scene>
+  </scenes>
+  <programVariableList/>
+  <programListOfLists/>
+  <programMultiplayerVariableList/>
+</program>
