@@ -2,83 +2,106 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>XML Game Loader</title>
+
+<!-- 🚫 DESABILITA ZOOM -->
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+
+<title>XML</title>
+
 <style>
-  html,body{height:100%;margin:0;background:#0b0b0b;color:#fff;font-family:Inter,Arial;}
-  #stage{position:relative;width:100%;height:100vh;overflow:hidden;background:#000;}
-  .sprite{
-    position:absolute;
-    transform-origin:top left;
-    image-rendering:pixelated; /* se quiser visual retrô */
-    pointer-events:none; /* sprites não bloqueiam cliques por padrão */
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+
+  /* 🚫 zoom / gesture */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.sprite {
+  position: absolute;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
 </style>
 </head>
+
 <body>
-  <div id="stage"></div>
+<div id="stage"></div>
 
 <script>
-/** Resolve nomes com o hack .gif.png -> .gif */
-function resolveAssetName(filename) {
-  if (!filename) return filename;
-  // se o nome terminar com ".gif.png" troca para ".gif"
-  if (filename.endsWith('.gif.png')) {
-    return filename.replace(/\.gif\.png$/,'\.gif');
+// ===============================
+// UTIL
+// ===============================
+function resolveAssetName(name) {
+  if (!name) return null;
+  if (name.endsWith('.gif.png')) {
+    return name.replace(/\.gif\.png$/, '.gif');
   }
-  return filename;
+  return name;
 }
 
-/** Carrega o game.xml (relativo ao site) e cria sprites <img> */
+// ===============================
+// LOAD XML
+// ===============================
 async function loadGame(xmlPath = 'game.xml') {
+  const stage = document.getElementById('stage');
+
+  let xmlText;
   try {
     const res = await fetch(xmlPath);
-    if (!res.ok) throw new Error('Falha ao carregar XML: ' + res.status);
-    const text = await res.text();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'application/xml');
-    const scene = xml.querySelector('scene');
-    const stage = document.getElementById('stage');
-
-    // limpa stage
-    stage.innerHTML = '';
-
-    // carrega cada sprite
-    const sprites = xml.querySelectorAll('sprite');
-    sprites.forEach(s => {
-      const srcRaw = s.getAttribute('src') || '';
-      const srcResolved = resolveAssetName(srcRaw);
-      // caminho relativo para assets/ (no GitHub Pages serve direto)
-      const srcPath = 'assets/' + srcResolved;
-
-      const img = document.createElement('img');
-      img.className = 'sprite';
-      img.src = srcPath;
-      img.alt = s.getAttribute('id') || '';
-      // posição e z-index
-      const x = parseFloat(s.getAttribute('x')||0);
-      const y = parseFloat(s.getAttribute('y')||0);
-      const z = parseInt(s.getAttribute('z')||0);
-      img.style.left = x + 'px';
-      img.style.top  = y + 'px';
-      img.style.zIndex = z;
-      // opcional: largura/altura via atributos (scale)
-      if (s.getAttribute('scale')) {
-        const scale = parseFloat(s.getAttribute('scale'));
-        img.style.transform = 'scale(' + scale + ')';
-      }
-      stage.appendChild(img);
-    });
-
-  } catch (err) {
-    console.error(err);
-    document.body.insertAdjacentHTML('beforeend',
-      '<p style="color:#f88">Erro: ' + err.message + '</p>');
+    if (!res.ok) throw new Error('XML não encontrado');
+    xmlText = await res.text();
+  } catch (e) {
+    console.warn('⚠️ game.xml não carregado:', e.message);
+    return;
   }
+
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(xmlText, 'application/xml');
+
+  const sprites = xml.querySelectorAll('sprite');
+
+  sprites.forEach(s => {
+    const rawSrc = s.getAttribute('src');
+    if (!rawSrc) return;
+
+    const src = resolveAssetName(rawSrc);
+    const img = new Image();
+    img.className = 'sprite';
+
+    // posição
+    img.style.left = (s.getAttribute('x') || 0) + 'px';
+    img.style.top  = (s.getAttribute('y') || 0) + 'px';
+    img.style.zIndex = s.getAttribute('z') || 1;
+
+    // 🚫 SE A IMAGEM NÃO EXISTIR → IGNORA
+    img.onerror = () => {
+      console.warn('⚠️ Asset ignorado:', src);
+      img.remove();
+    };
+
+    img.src = 'assets/' + src;
+    stage.appendChild(img);
+  });
 }
 
-// executa
-loadGame('game.xml');
+// ===============================
+// START
+// ===============================
+loadGame();
 </script>
 </body>
 </html>
