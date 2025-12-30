@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>XML Game Loader</title>
+<style>
+  html,body{height:100%;margin:0;background:#0b0b0b;color:#fff;font-family:Inter,Arial;}
+  #stage{position:relative;width:100%;height:100vh;overflow:hidden;background:#000;}
+  .sprite{
+    position:absolute;
+    transform-origin:top left;
+    image-rendering:pixelated; /* se quiser visual retrô */
+    pointer-events:none; /* sprites não bloqueiam cliques por padrão */
+  }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+<script>
+/** Resolve nomes com o hack .gif.png -> .gif */
+function resolveAssetName(filename) {
+  if (!filename) return filename;
+  // se o nome terminar com ".gif.png" troca para ".gif"
+  if (filename.endsWith('.gif.png')) {
+    return filename.replace(/\.gif\.png$/,'\.gif');
+  }
+  return filename;
+}
+
+/** Carrega o game.xml (relativo ao site) e cria sprites <img> */
+async function loadGame(xmlPath = 'game.xml') {
+  try {
+    const res = await fetch(xmlPath);
+    if (!res.ok) throw new Error('Falha ao carregar XML: ' + res.status);
+    const text = await res.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'application/xml');
+    const scene = xml.querySelector('scene');
+    const stage = document.getElementById('stage');
+
+    // limpa stage
+    stage.innerHTML = '';
+
+    // carrega cada sprite
+    const sprites = xml.querySelectorAll('sprite');
+    sprites.forEach(s => {
+      const srcRaw = s.getAttribute('src') || '';
+      const srcResolved = resolveAssetName(srcRaw);
+      // caminho relativo para assets/ (no GitHub Pages serve direto)
+      const srcPath = 'assets/' + srcResolved;
+
+      const img = document.createElement('img');
+      img.className = 'sprite';
+      img.src = srcPath;
+      img.alt = s.getAttribute('id') || '';
+      // posição e z-index
+      const x = parseFloat(s.getAttribute('x')||0);
+      const y = parseFloat(s.getAttribute('y')||0);
+      const z = parseInt(s.getAttribute('z')||0);
+      img.style.left = x + 'px';
+      img.style.top  = y + 'px';
+      img.style.zIndex = z;
+      // opcional: largura/altura via atributos (scale)
+      if (s.getAttribute('scale')) {
+        const scale = parseFloat(s.getAttribute('scale'));
+        img.style.transform = 'scale(' + scale + ')';
+      }
+      stage.appendChild(img);
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.body.insertAdjacentHTML('beforeend',
+      '<p style="color:#f88">Erro: ' + err.message + '</p>');
+  }
+}
+
+// executa
+loadGame('game.xml');
+</script>
+</body>
+</html>
