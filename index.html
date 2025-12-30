@@ -2,347 +2,252 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Game XML → HTML (auto)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>Game XML Player</title>
 <style>
-  :root{
-    --bg:#0b0b0b; --panel:#0f0f12; --accent:#FF7A1B; --muted:#9aa0a6; --white:#FFFFFF;
-  }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--white);font-family:Inter,system-ui,monospace;}
-  header{padding:14px 18px;border-bottom:1px solid #111;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);}
-  header h1{margin:0;font-size:16px;letter-spacing:0.4px}
-  header p{margin:6px 0 0;color:var(--muted);font-size:13px}
-  main{display:flex;gap:18px;padding:18px;height:calc(100% - 84px);box-sizing:border-box;}
-  #left{width:420px;max-width:40vw;min-width:320px;background:var(--panel);padding:12px;border-radius:8px;overflow:auto}
-  #right{flex:1;background:var(--panel);padding:12px;border-radius:8px;overflow:auto}
-  .meta{font-size:13px;color:var(--muted);margin-bottom:10px}
-  pre.xml{white-space:pre-wrap;background:#060606;padding:10px;border-radius:6px;overflow:auto;font-size:12px}
-  .node{border:1px solid #1a1a1a;padding:8px;margin:8px 0;border-radius:6px;background:linear-gradient(180deg,rgba(255,255,255,0.01),transparent)}
-  .node .hdr{display:flex;justify-content:space-between;cursor:pointer;user-select:none}
-  .node .hdr .name{font-weight:700;color:var(--accent)}
-  .node .body{margin-top:8px;display:block}
-  .attr{font-size:13px;color:var(--muted)}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:6px;border-bottom:1px solid #111;text-align:left}
-  th{color:var(--muted);font-weight:600}
-  img.asset{max-width:160px;max-height:120px;display:block;margin-top:6px;border-radius:6px}
-  .warn{color:#ffcc66;font-weight:700}
-  .ok{color:#66ff88}
-  footer{position:fixed;left:18px;right:18px;bottom:18px;background:transparent;color:var(--muted);font-size:13px}
-  a.small{color:var(--accent);text-decoration:none}
-  .controls{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-  button{background:#111;border:1px solid #222;padding:6px 10px;border-radius:6px;color:var(--white);cursor:pointer}
+  :root{--bg:#000;--panel:#0b0b0b;--accent:#FF7A1B;--muted:#9aa0a6;--white:#fff}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--white);font-family:Inter,system-ui,monospace;overflow:hidden;touch-action:none;}
+  #stage{position:relative;width:100%;height:100vh;background:var(--bg);user-select:none}
+  .caret{position:absolute;pointer-events:none;line-height:1;transform-origin:top left;font-family:monospace,system-ui}
+  .asset-img{position:absolute;pointer-events:none;transform-origin:top left;image-rendering:pixelated}
+  .notice{position:fixed;left:12px;bottom:12px;padding:8px 10px;background:#111;border:1px solid #222;color:var(--muted);border-radius:6px;font-size:12px}
 </style>
 </head>
 <body>
-<header>
-  <h1>XML → HTML automático</h1>
-  <p>Se houver <code>&lt;?xml-stylesheet ... href="style.xsl"?&gt;</code>, o XSL será aplicado. Caso contrário, uso um renderizador JS fallback.</p>
-</header>
-
-<main>
-  <section id="left">
-    <div class="meta">
-      <strong>game.xml</strong>
-      <div id="status" style="margin-top:6px;color:var(--muted)">Carregando...</div>
-    </div>
-
-    <div class="controls">
-      <button id="reloadBtn">🔁 Recarregar</button>
-      <button id="downloadHtmlBtn">⬇️ Baixar HTML</button>
-      <div style="flex:1"></div>
-    </div>
-
-    <div>
-      <strong>XML bruto</strong>
-      <pre id="rawXml" class="xml">Carregando...</pre>
-    </div>
-  </section>
-
-  <section id="right">
-    <div class="meta"><strong>Visualização</strong> (resultado da transformação)</div>
-    <div id="content">
-      <div style="color:var(--muted)">Aguardando carregamento...</div>
-    </div>
-  </section>
-</main>
-
-<footer>
-  <span class="warn">Obs:</span> assets referenciados serão apontados para <code>assets/</code> por padrão. Nomes terminando em <code>.gif.png</code> serão convertidos para <code>.gif</code> automaticamente.
-</footer>
+<div id="stage"></div>
+<div class="notice">Carregando game.xml…</div>
 
 <script>
-(async function(){
-  const rawXmlEl = document.getElementById('rawXml');
-  const contentEl = document.getElementById('content');
-  const statusEl = document.getElementById('status');
-  const reloadBtn = document.getElementById('reloadBtn');
-  const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
+/* ---------------------------
+   Config / Helpers
+   --------------------------- */
+const STAGE = document.getElementById('stage');
+const NOTICE = document.querySelector('.notice');
 
-  // Utility: replace "name.gif.png" -> "name.gif"
-  function resolveAssetName(name){
-    if(!name) return name;
-    if(name.endsWith('.gif.png')) return name.replace(/\.gif\.png$/,'\.gif');
-    return name;
+function resolveAssetName(name){
+  if(!name) return name;
+  if(name.endsWith('.gif.png')) return name.replace(/\.gif\.png$/,'\.gif');
+  return name;
+}
+
+async function fetchText(path='game.xml'){
+  try{
+    const r = await fetch(path, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  }catch(e){
+    console.warn('fetch error', e);
+    return null;
   }
+}
 
-  // Fetch game.xml text
-  async function fetchXmlText(path='game.xml'){
-    try{
-      const res = await fetch(path, {cache:'no-store'});
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.text();
-    }catch(e){
-      throw new Error('Falha ao buscar ' + path + ': ' + e.message);
+/* safe parse number */
+function numOf(node){
+  if(!node) return null;
+  const v = node.querySelector('value');
+  if(!v) return null;
+  const n = Number(v.textContent);
+  return isNaN(n) ? null : n;
+}
+
+/* Evaluate RAND-like structures seen in your XML.
+   Special handling for patterns like RAND( (screenWidth - N) , N )
+   Returns either a number or null if can't interpret.
+*/
+function evaluateRandLike(formulaNode, category, header){
+  if(!formulaNode) return null;
+  const t = formulaNode.querySelector('type');
+  const v = formulaNode.querySelector('value');
+  if(!t || t.textContent !== 'FUNCTION' || !v || v.textContent !== 'RAND') return null;
+
+  const left = formulaNode.querySelector('leftChild');
+  const right = formulaNode.querySelector('rightChild');
+
+  // try interpret left as (screenDim - N)
+  let leftVal = null;
+  if(left){
+    const opType = left.querySelector('type');
+    const opValue = left.querySelector('value');
+    if(opType && opType.textContent === 'OPERATOR' && opValue && opValue.textContent === 'MINUS'){
+      const opRight = left.querySelector('rightChild');
+      const n = numOf(opRight);
+      if(n != null){
+        const screenDim = (category === 'X_POSITION') ? Number(header.screenWidth) : Number(header.screenHeight);
+        if(!isNaN(screenDim)) leftVal = screenDim - n;
+      }
+    } else {
+      // fallback: if left contains a NUMBER anywhere
+      const n = numOf(left);
+      if(n != null) leftVal = n;
     }
   }
 
-  // Try to extract xml-stylesheet href from xml text
-  function extractStylesheetHref(xmlText){
-    // procura <?xml-stylesheet ... href="..." ?>
-    const m = xmlText.match(/<\?xml-stylesheet[^>]*href\s*=\s*['"]([^'"]+)['"][^>]*\?>/i);
-    return m ? m[1] : null;
+  const rightVal = numOf(right);
+
+  if(leftVal == null || rightVal == null) return null;
+
+  const a = Math.min(leftVal, rightVal);
+  const b = Math.max(leftVal, rightVal);
+  return a + Math.random() * (b - a);
+}
+
+/* extract simple NUMBER/STRING from formula node */
+function extractSimple(formulaNode){
+  if(!formulaNode) return null;
+  const t = formulaNode.querySelector('type');
+  const v = formulaNode.querySelector('value');
+  if(!t || !v) return null;
+  if(t.textContent === 'NUMBER') return Number(v.textContent);
+  if(t.textContent === 'STRING') return v.textContent;
+  return null;
+}
+
+/* clamp helper */
+function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---------------------------
+   Runtime: parse and run XML
+   --------------------------- */
+(async function main(){
+  const raw = await fetchText('game.xml');
+  if(!raw){
+    NOTICE.textContent = 'Erro: game.xml nao encontrado.';
+    return;
+  }
+  NOTICE.textContent = 'game.xml carregado. Interpretando...';
+
+  const xml = new DOMParser().parseFromString(raw, 'application/xml');
+  const parserError = xml.querySelector('parsererror');
+  if(parserError){
+    NOTICE.textContent = 'Erro no XML (veja console).';
+    console.error('XML parse error', parserError);
+    return;
   }
 
-  // Apply XSLT (browser support assumed); returns DocumentFragment or HTML element
-  async function applyXSLT(xmlDoc, xslText){
-    try{
-      const xslDoc = new DOMParser().parseFromString(xslText, 'application/xml');
-      if(window.XSLTProcessor){
-        const proc = new XSLTProcessor();
-        proc.importStylesheet(xslDoc);
-        const frag = proc.transformToFragment(xmlDoc, document);
-        return frag;
-      } else {
-        // fallback: try transformToDocument (older)
-        if(typeof window.ActiveXObject !== 'undefined' || 'ActiveXObject' in window){
-          // old IE path (unlikely on modern browsers)
-          const xs = new ActiveXObject('Msxml2.XSLTemplate');
-          const xsDoc = new ActiveXObject('Msxml2.FreeThreadedDOMDocument');
-          xsDoc.loadXML(xslText);
-          const template = xs.createTemplate();
-          template.stylesheet = xsDoc;
-          const xsl = template.createProcessor();
-          xsl.input = xmlDoc;
-          xsl.transform();
-          const html = xsl.output;
-          const wrapper = document.createElement('div');
-          wrapper.innerHTML = html;
-          return wrapper;
-        }
-        throw new Error('XSLTProcessor não disponível neste navegador');
-      }
-    }catch(e){
-      throw new Error('Erro XSLT: ' + (e.message || e));
-    }
-  }
+  // header (for screenWidth/screenHeight fallback)
+  const headerNode = xml.querySelector('header') || {};
+  const header = {
+    screenWidth: headerNode.querySelector ? Number((headerNode.querySelector('screenWidth')||{textContent:window.innerWidth}).textContent) : window.innerWidth,
+    screenHeight: headerNode.querySelector ? Number((headerNode.querySelector('screenHeight')||{textContent:window.innerHeight}).textContent) : window.innerHeight
+  };
 
-  // Default JS renderer: recursivo, cria nó colapsável mostrando elementos, atributos, textContent
-  function renderXmlFallback(xmlDoc){
-    const wrap = document.createElement('div');
-
-    function renderNode(node){
-      if(node.nodeType === Node.TEXT_NODE){
-        const t = node.textContent.trim();
-        if(!t) return null;
-        const el = document.createElement('div');
-        el.textContent = t;
-        el.style.padding = '4px 0';
-        return el;
-      }
-
-      if(node.nodeType !== Node.ELEMENT_NODE) return null;
-
-      const box = document.createElement('div');
-      box.className = 'node';
-
-      const hdr = document.createElement('div');
-      hdr.className = 'hdr';
-
-      const name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = '<' + node.nodeName + '>';
-
-      const attrBtn = document.createElement('div');
-      attrBtn.innerHTML = '<small style="color:var(--muted)">' + (node.children.length + (node.attributes? node.attributes.length : 0)) + ' itens</small>';
-
-      hdr.appendChild(name);
-      hdr.appendChild(attrBtn);
-      box.appendChild(hdr);
-
-      const body = document.createElement('div');
-      body.className = 'body';
-
-      // attributes
-      if(node.attributes && node.attributes.length){
-        const attrsWrap = document.createElement('div');
-        attrsWrap.style.marginBottom = '6px';
-        Array.from(node.attributes).forEach(a=>{
-          const row = document.createElement('div');
-          row.className = 'attr';
-          row.textContent = a.name + ' = "' + a.value + '"';
-          attrsWrap.appendChild(row);
-        });
-        body.appendChild(attrsWrap);
-      }
-
-      // special-case: sprite elements -> show table with src preview (resolve .gif.png)
-      if(node.nodeName.toLowerCase() === 'sprite'){
-        const table = document.createElement('table');
-        const thead = document.createElement('thead');
-        thead.innerHTML = '<tr><th>campo</th><th>valor</th></tr>';
-        table.appendChild(thead);
-        const tbody = document.createElement('tbody');
-        // attributes as rows
-        Array.from(node.attributes).forEach(a=>{
-          const tr = document.createElement('tr');
-          const k = document.createElement('td'); k.textContent = a.name;
-          const v = document.createElement('td'); v.textContent = a.value;
-          tr.appendChild(k); tr.appendChild(v);
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        body.appendChild(table);
-
-        // try show image preview if 'src' attr exists
-        const srcAttr = node.getAttribute('src');
-        if(srcAttr){
-          const resolved = resolveAssetName(srcAttr);
-          const img = document.createElement('img');
-          img.className = 'asset';
-          img.src = 'assets/' + resolved;
-          img.alt = resolved;
-          // if fail -> show placeholder
-          img.onerror = () => {
-            img.style.display = 'none';
-            const p = document.createElement('div');
-            p.style.color = 'var(--muted)';
-            p.textContent = 'Preview não disponível: assets/' + resolved;
-            body.appendChild(p);
-          };
-          body.appendChild(img);
-        }
-      } // end sprite
-
-      // children
-      const childWrap = document.createElement('div');
-      Array.from(node.childNodes).forEach(cn=>{
-        const childEl = renderNode(cn);
-        if(childEl) childWrap.appendChild(childEl);
+  // ========== StartScript: spawn initial caret if present ==========
+  const startScript = xml.querySelector('script[type="StartScript"]');
+  let initialProps = {x:100,y:100,size:48,color:'#fff',symbol:'^'};
+  if(startScript){
+    const show = startScript.querySelector('brick[type="ShowText3Brick"]');
+    if(show){
+      const formulas = show.querySelectorAll('formula');
+      formulas.forEach(f => {
+        const cat = f.getAttribute('category');
+        if(cat==='X_POSITION'){ const v = extractSimple(f); if(v!=null) initialProps.x = v; }
+        if(cat==='Y_POSITION'){ const v = extractSimple(f); if(v!=null) initialProps.y = v; }
+        if(cat==='SIZE'){ const v = extractSimple(f); if(v!=null) initialProps.size = v; }
+        if(cat==='COLOR'){ const v = extractSimple(f); if(v!=null) initialProps.color = v; }
+        if(cat==='TEXT'){ const v = extractSimple(f); if(v!=null) initialProps.symbol = v; }
       });
-      body.appendChild(childWrap);
+    }
+  }
 
-      // collapsible behaviour
-      hdr.addEventListener('click', ()=>{
-        if(body.style.display === 'none'){ body.style.display = 'block'; }
-        else { body.style.display = 'none'; }
+  // helper: spawn caret as text
+  let current = null;
+  function spawnTextCaret(x, y, size=48, color='#fff', symbol='^'){
+    if(current) current.remove();
+    const d = document.createElement('div');
+    d.className = 'caret';
+    d.textContent = symbol;
+    d.style.left = (x || 0) + 'px';
+    d.style.top  = (y || 0) + 'px';
+    d.style.color = color;
+    d.style.fontSize = size + 'px';
+    STAGE.appendChild(d);
+    current = d;
+  }
+
+  // helper: spawn image if provided src (tries assets/<src>, resolves .gif.png -> .gif)
+  async function spawnImage(src, x, y, scale=1){
+    if(current) current.remove();
+    const img = document.createElement('img');
+    img.className = 'asset-img';
+    const resolved = resolveAssetName(src);
+    img.src = 'assets/' + resolved;
+    img.style.left = (x||0) + 'px';
+    img.style.top  = (y||0) + 'px';
+    img.onload = () => {
+      img.style.width = (img.naturalWidth * scale) + 'px';
+      img.style.height = (img.naturalHeight * scale) + 'px';
+    };
+    img.onerror = () => {
+      console.warn('asset nao encontrado:', resolved);
+      img.remove();
+      // fallback: spawn text caret if image missing
+      spawnTextCaret(x,y,initialProps.size,initialProps.color, initialProps.symbol);
+    };
+    STAGE.appendChild(img);
+    current = img;
+  }
+
+  // spawn initial (prefer image if XML defines a sprite asset for the caret)
+  // check if there is a sprite in XML that is intended to be the caret (heuristic: src contains '^' name or sprite id 'caret' etc)
+  // Simples: se houver <sprite id="caret" src="..."> usa asset, senão usa texto
+  const caretSprite = xml.querySelector('sprite[id="caret"], sprite[id="arrow"], sprite[id="seta"]') || null;
+  if(caretSprite && caretSprite.getAttribute('src')){
+    spawnImage(caretSprite.getAttribute('src'), initialProps.x, initialProps.y, 1);
+  } else {
+    spawnTextCaret(initialProps.x, initialProps.y, initialProps.size, initialProps.color, initialProps.symbol);
+  }
+
+  // ========== WhenTouchDownScript: prepare formulas ==========
+  const whenTouch = xml.querySelector('script[type="WhenTouchDownScript"]');
+  let whenFormX = null, whenFormY = null, whenSize = initialProps.size, whenColor = initialProps.color, whenSymbol = initialProps.symbol, whenSpriteSrc = null;
+
+  if(whenTouch){
+    const show = whenTouch.querySelector('brick[type="ShowText3Brick"]');
+    if(show){
+      const formulas = show.querySelectorAll('formula');
+      formulas.forEach(f => {
+        const cat = f.getAttribute('category');
+        if(cat === 'X_POSITION') whenFormX = f;
+        if(cat === 'Y_POSITION') whenFormY = f;
+        if(cat === 'SIZE'){ const v = extractSimple(f); if(v!=null) whenSize = v; }
+        if(cat === 'COLOR'){ const v = extractSimple(f); if(v!=null) whenColor = v; }
+        if(cat === 'TEXT'){ const v = extractSimple(f); if(v!=null) whenSymbol = v; }
       });
-      // initially expanded for root-level, collapsed for deeper nodes
-      body.style.display = node.parentElement && node.parentElement.nodeName !== '#document' ? 'none':'block';
-
-      box.appendChild(body);
-      return box;
     }
 
-    const root = xmlDoc.documentElement;
-    const title = document.createElement('h2');
-    title.textContent = '<' + root.nodeName + '>';
-    wrap.appendChild(title);
-
-    const tree = renderNode(root);
-    if(tree) wrap.appendChild(tree);
-    return wrap;
+    // also check if there's a sprite element referenced inside the WhenTouchDown script (rare)
+    const spriteRef = whenTouch.querySelector('sprite');
+    if(spriteRef && spriteRef.getAttribute('src')) whenSpriteSrc = spriteRef.getAttribute('src');
   }
 
-  // Convert DocumentFragment/Element to HTML string for download
-  function htmlStringFromNode(node){
-    const div = document.createElement('div');
-    div.appendChild(node.cloneNode(true));
-    return '<!doctype html>\n<html>\n<head><meta charset="utf-8"><title>Exported</title></head>\n<body style="background:#000;color:#fff;font-family:Inter,system-ui,monospace;margin:20px">' + div.innerHTML + '</body></html>';
-  }
+  // click handler to spawn according to formulas (or fallback random)
+  function onSpawnEvent(){
+    let x = null, y = null;
+    const tryX = evaluateRandLike(whenFormX, 'X_POSITION', header);
+    const tryY = evaluateRandLike(whenFormY, 'Y_POSITION', header);
+    if(tryX != null) x = Math.round(tryX);
+    if(tryY != null) y = Math.round(tryY);
 
-  // Main render pipeline
-  async function renderPipeline(){
-    statusEl.textContent = 'Carregando game.xml...';
-    rawXmlEl.textContent = '...';
-    contentEl.innerHTML = '<div style="color:var(--muted)">Processando...</div>';
+    const pad = 20;
+    if(x == null) x = Math.round(Math.random() * Math.max(0, STAGE.clientWidth - pad));
+    else x = clamp(x, 0, Math.max(0, STAGE.clientWidth - pad));
+    if(y == null) y = Math.round(Math.random() * Math.max(0, STAGE.clientHeight - pad));
+    else y = clamp(y, 0, Math.max(0, STAGE.clientHeight - pad));
 
-    let xmlText;
-    try{
-      xmlText = await fetchXmlText('game.xml');
-    }catch(e){
-      rawXmlEl.textContent = '';
-      contentEl.innerHTML = '<div class="warn">Erro ao carregar game.xml — veja console.</div>';
-      statusEl.textContent = 'Erro: game.xml não carregado';
-      console.error(e);
-      return;
-    }
-
-    rawXmlEl.textContent = xmlText;
-    statusEl.textContent = 'game.xml carregado';
-
-    // procurar stylesheet PI
-    const stylesheetHref = extractStylesheetHref(xmlText);
-    const xmlDoc = new DOMParser().parseFromString(xmlText, 'application/xml');
-
-    // Se há parse error, mostra na tela
-    const parserError = xmlDoc.querySelector('parsererror');
-    if(parserError){
-      contentEl.innerHTML = '<div class="warn">Erro ao parsear XML — ver console para detalhes.</div>';
-      console.error('XML parse error', parserError.textContent || parserError.innerText);
-      statusEl.textContent = 'Erro no XML';
-      return;
-    }
-
-    // tenta XSLT se houver href
-    if(stylesheetHref){
-      statusEl.textContent = 'Estilo detectado: ' + stylesheetHref + ' → aplicando XSLT...';
-      try{
-        // busca o XSL (relativo)
-        const xslText = await fetchXmlText(stylesheetHref);
-        const frag = await applyXSLT(xmlDoc, xslText);
-        contentEl.innerHTML = '';
-        contentEl.appendChild(frag);
-        statusEl.textContent = 'Transformação XSLT aplicada';
-        return;
-      }catch(e){
-        console.warn('Falha XSLT fallback:', e.message || e);
-        // segue para fallback
-      }
-    }
-
-    // fallback: JS renderer
-    statusEl.textContent = 'Nenhum XSL detectado — usando renderer JS fallback';
-    try{
-      const fallback = renderXmlFallback(xmlDoc);
-      contentEl.innerHTML = '';
-      contentEl.appendChild(fallback);
-      statusEl.textContent = 'Renderização via JS (fallback) concluída';
-    }catch(e){
-      contentEl.innerHTML = '<div class="warn">Falha ao renderizar XML — veja console.</div>';
-      console.error(e);
-      statusEl.textContent = 'Erro na renderização JS';
+    // if WhenTouch references a sprite asset, try use it
+    if(whenSpriteSrc){
+      spawnImage(whenSpriteSrc, x, y, 1);
+    } else {
+      spawnTextCaret(x, y, whenSize, whenColor, whenSymbol);
     }
   }
 
-  // wire buttons
-  reloadBtn.addEventListener('click', ()=>{ renderPipeline(); });
-  downloadHtmlBtn.addEventListener('click', async ()=>{
-    // tenta capturar o conteúdo atual e transformar em HTML string
-    const exported = htmlStringFromNode(contentEl);
-    const blob = new Blob([exported], {type:'text/html'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'game_export.html';
-    document.body.appendChild(a);
-    a.click();
-    URL.revokeObjectURL(url);
-    a.remove();
-  });
+  // wire events (touch & click)
+  STAGE.addEventListener('click', onSpawnEvent);
+  STAGE.addEventListener('touchstart', (e) => { e.preventDefault(); onSpawnEvent(); }, {passive:false});
+  document.addEventListener('gesturestart', e => e.preventDefault());
 
-  // inicializa
-  renderPipeline();
+  NOTICE.textContent = 'Pronto — clique/touch para spawnar. (Apenas 1 instancia do ^ é mantida)';
 })();
 </script>
 </body>
